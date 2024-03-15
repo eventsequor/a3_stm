@@ -2,11 +2,11 @@ defmodule Model.Room do
   @mut MutexEder
   @time_expect_in_queue :infinity
 
-  defstruct [Model.Room, attributes: [:id, :name]]
-
   def new_room(id, name) do
     {Model.Room, id, name}
   end
+
+
 
   def create_room_table do
     case :mnesia.create_table(Model.Room, attributes: [:id, :name]) do
@@ -25,7 +25,6 @@ defmodule Model.Room do
 
     case :mnesia.transaction(data_room) do
       {:atomic, :ok} ->
-        IO.puts("Room was create success")
         {:ok}
 
       _ ->
@@ -62,6 +61,7 @@ defmodule Model.Room do
   end
 
   def print_room_list do
+    IO.puts("\n Rooms list")
     query = fn -> :mnesia.match_object({Model.Room, :_, :_}) end
 
     case :mnesia.transaction(query) do
@@ -78,7 +78,7 @@ defmodule Model.Room do
           IO.inspect("Number of elements #{Enum.count(answer)}")
           {:ok}
         else
-          {:error, "There are not element to show in the <room> table"}
+          {:error, "There are not element to show in the <Model.Room> table"}
         end
 
       {:aborted, {:no_exists, Model.Room}} ->

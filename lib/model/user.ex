@@ -1,5 +1,4 @@
 defmodule Model.User do
-  alias Model.Room
   @mut MutexEder
   @time_expect_in_queue :infinity
 
@@ -27,7 +26,18 @@ defmodule Model.User do
 
     case :mnesia.transaction(data_room) do
       {:atomic, :ok} ->
-        IO.puts("User was added success")
+        {:ok}
+
+      _ ->
+        {:fail}
+    end
+  end
+
+  def delete_user(id, name, id_room) do
+    data_room = fn -> :mnesia.delete_object({Model.User, id, name, id_room}) end
+
+    case :mnesia.transaction(data_room) do
+      {:atomic, :ok} ->
         {:ok}
 
       _ ->
@@ -36,17 +46,34 @@ defmodule Model.User do
   end
 
   def add_user(user = %Model.User{}) do
+    create_or_delete_user(user, true)
+  end
+
+  def user_delete(user = %Model.User{}) do
+    create_or_delete_user(user, false)
+  end
+
+  defp create_or_delete_user(user = %Model.User{}, create?) do
     tran_id = {Transaction, {:id, 2}}
 
     lock = Mutex.await(@mut, tran_id, @time_expect_in_queue)
 
-    IO.puts("Creating user with id #{user.id}")
+    decision = {Model.Room.exist_room?(user.id_room), create?}
 
     status =
-      if Model.Room.exist_room?(user.id_room) do
-        insert_user(user.id, user.name, user.id_room)
-      else
-        {:fail, "The user are not registred in the room with id #{user.id_room}"}
+      case decision do
+        {true, true} ->
+          insert_user(user.id, user.name, user.id_room)
+
+        {true, false} ->
+          IO.puts("Deleting user with id #{user.id}")
+          delete_user(user.id, user.name, user.id_room)
+
+        {false, false} ->
+          {:fail, "The user are not registred in the room with id #{user.id_room}"}
+
+        {false, true} ->
+          {:undefined}
       end
 
     Mutex.release(@mut, lock)
@@ -70,6 +97,7 @@ defmodule Model.User do
   end
 
   def print_user_list do
+    IO.puts("\n User list")
     query = fn -> :mnesia.match_object({Model.User, :_, :_, :_}) end
 
     case :mnesia.transaction(query) do
@@ -94,5 +122,21 @@ defmodule Model.User do
         IO.puts("ERROR: Does not exist any room")
         {:aborted, {:no_exists, Model.Room}}
     end
+  end
+
+  def write_message(message = %Model.Message{}) do
+    tran_id = {Transaction, {:id, 3}}
+
+    lock = Mutex.await(@mut, tran_id, @time_expect_in_queue)
+
+    status =
+      if Model.User.exist_user?(message.id_user) do
+        Model.Message.insert_message(message)
+      else
+        {:fail, "The user with id <#{message.id_user}> is not suscribe in the room"}
+      end
+
+    Mutex.release(@mut, lock)
+    status
   end
 end
